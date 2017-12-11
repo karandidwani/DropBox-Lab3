@@ -1,7 +1,9 @@
 package com.example.demo.controller;
 
 import com.example.demo.entity.User;
+import com.example.demo.entity.UserGroup;
 import com.example.demo.service.UserService;
+
 import jdk.nashorn.internal.parser.JSONParser;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,22 +48,30 @@ public class UserController {
 
     @PostMapping(path = "/login", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> login(@RequestBody String user, HttpSession session) {
-        System.out.println("user "+user);
+        System.out.println("user " + user);
         JSONObject jsonObject = new JSONObject(user);
 
-        List<User> b = userService.login(jsonObject.getString("username"),jsonObject.getString("password"));
-        System.out.println("if "+b.isEmpty());
-        if(b.isEmpty()){
+        List<User> b = userService.login(jsonObject.getString("username"), jsonObject.getString("password"));
+        System.out.println("if " + b.isEmpty());
+        if (b.isEmpty()) {
             return new ResponseEntity(HttpStatus.UNAUTHORIZED);
-        }else {
+        } else {
             session.setAttribute("name", jsonObject.getString("username"));
             return new ResponseEntity(HttpStatus.OK);
         }
     }
 
+    @PostMapping(value = "/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public ResponseEntity<?> logout(HttpSession session) {
+        System.out.println(session.getAttribute("name"));
+        session.invalidate();
+        return new ResponseEntity(HttpStatus.OK);
+    }
+
     @PostMapping(path = "/listDir", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> listDir(@RequestBody String path) {
-       System.out.println("filename "+path);
+        System.out.println("filename " + path);
         JSONObject jsonObject = new JSONObject(path);
         File directory = new File(jsonObject.getString("path"));
         //get all the files from a directory
@@ -71,24 +81,25 @@ public class UserController {
             System.out.println(file.getName());
         }*/
 
-        return new ResponseEntity( HttpStatus.OK);
+        return new ResponseEntity(HttpStatus.OK);
     }
 
-    @GetMapping(path = "/listDirFiles", produces=MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> listDirFiles()
-    {
+
+
+    @GetMapping(path = "/listDirFiles", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listDirFiles() {
         System.out.println("in get");
-        int i =0;
+        int i = 0;
         String[] allFiles = new String[fList.length];
-        for (File file : fList){
-            System.out.println("files"+file.getName());
+        for (File file : fList) {
+            System.out.println("files" + file.getName());
             allFiles[i] = file.getName();
             i++;
         }
         return new ResponseEntity(allFiles, HttpStatus.OK);
     }
 
-   /* @GetMapping(path="/listDirFiles",consumes = MediaType.APPLICATION_JSON_VALUE)
+     /* @GetMapping(path="/listDirFiles",consumes = MediaType.APPLICATION_JSON_VALUE)
     public @ResponseBody String[] listDirFiles(@RequestBody String req)
     {
         JSONObject pathJSON = new JSONObject(req);
@@ -98,11 +109,105 @@ public class UserController {
         return files;
     }
 */
-    @PostMapping(value = "/logout")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public ResponseEntity<?> logout(HttpSession session) {
-        System.out.println(session.getAttribute("name"));
-        session.invalidate();
+     @PostMapping("/uploadfiles")
+     public ResponseEntity<?> singleFileUpload(@RequestParam("file") MultipartFile file, HttpSession session) {
+         String userfolder = session.getAttribute("name").toString();
+         userService.uploader(file, userfolder);
+         return new ResponseEntity(HttpStatus.OK);
+     }
+
+
+    @PostMapping(path = "/share", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> shareFile(@RequestBody User user, HttpSession session) {
+        boolean x = userService.sharefile(user);
+        return new ResponseEntity(HttpStatus.OK);
+
+    }
+
+    @PostMapping(path = "/delete", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> deleteFile(@RequestBody String filename, HttpSession session) {
+        boolean x = userService.deleteFile(fileName, session.getAttribute("name").toString());
         return new ResponseEntity(HttpStatus.OK);
     }
+
+    @PostMapping("/listMembers")
+    public ResponseEntity<?> listGroupMembers(@RequestBody String user,
+                                              HttpSession session) {
+        String userEmail = session.getAttribute("name").toString();
+        JSONObject userObj = new JSONObject(user);
+        User[] memberList = userService.listMembers(Integer.parseInt(userObj.getString("groupId")));
+        int len = memberList.length;
+        if ( len > 0) {
+            System.out.println("Members found")
+            return new ResponseEntity(memberList, HttpStatus.OK);
+        } else {
+            return new ResponseEntity(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+  /*  @PostMapping("/listUserGroups")
+    public ResponseEntity<?> listUserGroups(@RequestBody String user,
+                                            HttpSession session) {
+        String userEmail = session.getAttribute("name").toString();
+        JSONObject userObj = new JSONObject(user);
+        System.out.println(userObj);
+
+        GroupT[] groupList = sharefolderservice.listUserGroups(userEmail);
+
+        if (groupList.length > 0) {
+            return new ResponseEntity(groupList, HttpStatus.OK);
+        } else {
+            return new ResponseEntity(HttpStatus.BAD_REQUEST);
+        }
+    }
+  */
+
+    @PostMapping("/createGroup")
+    public ResponseEntity<?> createGroup(@RequestBody String user,
+                                         HttpSession session) {
+        String userEmail = session.getAttribute("name").toString();
+        JSONObject userObj = new JSONObject(user);
+        System.out.println(userObj);
+
+        boolean success = userService.createGroup(userObj.getString("groupname"), userEmail);
+
+        if (success) {
+            return new ResponseEntity(HttpStatus.OK);
+        } else {
+            return new ResponseEntity(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @PostMapping("/addMembersToGroup") // //new annotation since 4.3
+    public ResponseEntity<?> addMembersToGroup(@RequestBody String user,
+                                               HttpSession session) {
+        String userEmail = session.getAttribute("name").toString();
+        JSONObject userObj = new JSONObject(user);
+        System.out.println(userObj);
+
+        boolean success = userService.addMembers(Integer.parseInt(userObj.getString("groupId")), userObj.getString("memberEmail"));
+
+        if (success) {
+            return new ResponseEntity(HttpStatus.OK);
+        } else {
+            return new ResponseEntity(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @PostMapping(path = "/createShareFolder", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> createSharedFolder(@RequestBody CreateSharedFolder createSharedFolder, HttpSession session) {
+        userService.createShareFolder(createShareFolder, session.getAttribute("name").toString());
+        return new ResponseEntity(HttpStatus.OK);
+
+    }
+
+    @PostMapping(path = "/createFolder", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> createfolder(@RequestBody CreateShareFolder createsharefolder, HttpSession session) {
+        userService.createFolder(createsharefolder, session.getAttribute("name").toString());
+        return new ResponseEntity(HttpStatus.OK);
+
+    }
+
+
+
 }
